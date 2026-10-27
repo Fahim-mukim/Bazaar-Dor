@@ -5,12 +5,6 @@ import { MongoClient } from "mongodb";
 const uri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/bazardor";
 const dbName = process.env.MONGODB_DB_NAME || "bazardor";
 
-if (uri.includes("<db_password>") || uri.includes("<password>")) {
-  console.error(
-    "⚠️ [Better Auth MongoDB Alert]: MONGODB_URI contains '<db_password>'. User signup/signin requires replacing '<db_password>' with the actual MongoDB Atlas password in .env."
-  );
-}
-
 // Singleton client to avoid connection leaks across Next.js HMR reloads
 const client =
   global._authMongoClient ||
@@ -42,12 +36,30 @@ if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
   };
 }
 
+const appUrl =
+  process.env.BETTER_AUTH_URL ||
+  process.env.NEXT_PUBLIC_APP_URL ||
+  "http://localhost:3000";
+
 export const auth = betterAuth({
   database: mongodbAdapter(db),
-  baseURL:
-    process.env.BETTER_AUTH_URL ||
-    process.env.NEXT_PUBLIC_APP_URL ||
+  baseURL: appUrl,
+  trustedOrigins: [
+    appUrl,
     "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+    "http://localhost:3003",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    "http://127.0.0.1:3002",
+    "http://127.0.0.1:3003",
+    "http://localhost:*",
+    "http://127.0.0.1:*",
+    "http://192.168.*:*",
+    process.env.BETTER_AUTH_URL,
+    process.env.NEXT_PUBLIC_APP_URL,
+  ].filter(Boolean),
   secret:
     process.env.BETTER_AUTH_SECRET ||
     "bazardor-production-secret-key-at-least-32-chars-long",

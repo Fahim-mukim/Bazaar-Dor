@@ -1,8 +1,10 @@
 import { getAllProducts } from "@/lib/api";
 import { formatChange, formatPrice, formatUnit } from "@/lib/utils";
 import Link from "next/link";
+import { connection } from "next/server";
 
 export default async function Marque() {
+  await connection();
   let products = [];
   try {
     products = await getAllProducts();

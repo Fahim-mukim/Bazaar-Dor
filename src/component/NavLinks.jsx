@@ -1,8 +1,10 @@
 import { getAllCategories } from "@/lib/api";
 import CategoryLinksClient from "./CategoryLinksClient";
 import { Suspense } from "react";
+import { connection } from "next/server";
 
 export default async function NavLinks() {
+  await connection();
   let categories = [];
   try {
     categories = await getAllCategories();

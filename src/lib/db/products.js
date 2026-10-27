@@ -14,7 +14,6 @@ export async function getDBProducts(query = {}) {
 
     return products.map(({ _id, ...rest }) => rest);
   } catch (err) {
-    console.error("[DB Products] Error fetching products:", err.name, err.message);
     throw err;
   }
 }
@@ -34,7 +33,6 @@ export async function getDBProductsByCategory(categorySlug) {
 
     return products.map(({ _id, ...rest }) => rest);
   } catch (err) {
-    console.error("[DB Products] Error fetching by category:", err.name, err.message);
     throw err;
   }
 }
@@ -58,7 +56,6 @@ export async function getDBProductByIdOrSlug(idOrSlug) {
     const { _id, ...rest } = product;
     return rest;
   } catch (err) {
-    console.error("[DB Products] Error fetching product by id/slug:", err.name, err.message);
     throw err;
   }
 }

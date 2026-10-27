@@ -11,13 +11,6 @@ export const metadata = {
 };
 
 export default async function SignUpPage({ searchParams }) {
-  // Check if MongoDB URI is properly configured
-  const mongoUri = process.env.MONGODB_URI || "";
-  const isDbConfigured =
-    Boolean(mongoUri) &&
-    !mongoUri.includes("<db_password>") &&
-    !mongoUri.includes("<password>");
-
   // Server-side session check
   const headerList = await headers();
   let session = null;
@@ -43,7 +36,7 @@ export default async function SignUpPage({ searchParams }) {
           </div>
         }
       >
-        <SignUpForm isDbConfigured={isDbConfigured} />
+        <SignUpForm />
       </Suspense>
     </div>
   );

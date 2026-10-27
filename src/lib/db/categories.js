@@ -14,7 +14,6 @@ export async function getDBCategories() {
 
     return categories.map(({ _id, ...rest }) => rest);
   } catch (err) {
-    console.error("[DB Categories] Error fetching categories:", err.name, err.message);
     throw err;
   }
 }
@@ -34,7 +33,6 @@ export async function getDBCategoryBySlug(slug) {
     const { _id, ...rest } = category;
     return rest;
   } catch (err) {
-    console.error("[DB Categories] Error fetching category by slug:", err.name, err.message);
     throw err;
   }
 }

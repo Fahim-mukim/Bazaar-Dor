@@ -3,13 +3,6 @@ import { MongoClient } from "mongodb";
 const uri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/bazardor";
 const dbName = process.env.MONGODB_DB_NAME || "bazardor";
 
-// Check if placeholder was accidentally left in the URI
-if (uri.includes("<db_password>") || uri.includes("<password>")) {
-  console.error(
-    "⚠️ [MongoDB Configuration Alert]: Your MONGODB_URI in .env still contains '<db_password>'. Please replace '<db_password>' with your actual MongoDB Database User password!"
-  );
-}
-
 const options = {
   maxPoolSize: 10,
   minPoolSize: 1,
