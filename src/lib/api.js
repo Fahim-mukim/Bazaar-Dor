@@ -1,105 +1,129 @@
 /**
- * BazarDor API client
- * Interacts with the official Programming Hero BazarDor API
- * Includes fallback endpoints for maximum uptime.
+ * BazarDor Data Access Layer
+ * Primary Source of Truth: MongoDB (Persistent Application Database)
+ * Fallback: Programming Hero API (Used for initial import and disaster recovery)
  */
+
+import { getDBProducts, getDBProductsByCategory, getDBProductByIdOrSlug } from "@/lib/db/products";
+import { getDBCategories, getDBCategoryBySlug } from "@/lib/db/categories";
 
 const PRIMARY_API = "https://openapi.programming-hero.com/api/bazardor";
 const FALLBACK_API = "https://api.abcz.workers.dev/api/bazardor";
 
-async function fetchWithFallback(endpoint, options = {}) {
-  const fetchOptions = {
-    next: { revalidate: 60 },
-    ...options,
-  };
-
+async function fetchFromExternalApi(endpoint) {
   try {
-    const res = await fetch(`${PRIMARY_API}${endpoint}`, fetchOptions);
-    if (res.ok) {
-      return await res.json();
-    }
-    console.warn(`Primary API failed for ${endpoint} with status ${res.status}, trying fallback...`);
+    const res = await fetch(`${PRIMARY_API}${endpoint}`, { next: { revalidate: 60 } });
+    if (res.ok) return await res.json();
   } catch (err) {
-    console.warn(`Primary API network error for ${endpoint}:`, err.message);
+    console.warn(`[External API] Primary failed for ${endpoint}:`, err.message);
   }
 
-  // Fallback attempt
   try {
-    const fallbackRes = await fetch(`${FALLBACK_API}${endpoint}`, fetchOptions);
-    if (fallbackRes.ok) {
-      return await fallbackRes.json();
-    }
+    const fallbackRes = await fetch(`${FALLBACK_API}${endpoint}`, { next: { revalidate: 60 } });
+    if (fallbackRes.ok) return await fallbackRes.json();
   } catch (fallbackErr) {
-    console.error(`Fallback API network error for ${endpoint}:`, fallbackErr.message);
+    console.error(`[External API] Fallback failed for ${endpoint}:`, fallbackErr.message);
   }
 
   return null;
 }
 
 /**
- * Fetch all categories
+ * Fetch all categories — Uses MongoDB as the primary source of truth
  */
 export async function getAllCategories() {
-  const data = await fetchWithFallback("/categories");
-  return Array.isArray(data) ? data : [];
+  try {
+    const dbCats = await getDBCategories();
+    if (Array.isArray(dbCats) && dbCats.length > 0) {
+      return dbCats;
+    }
+  } catch (err) {
+    console.warn("[Data Access] MongoDB categories read failed, using external fallback:", err.name);
+  }
+
+  const external = await fetchFromExternalApi("/categories");
+  return Array.isArray(external) ? external : [];
 }
 
 /**
- * Fetch a single category by slug
+ * Fetch single category by slug — Uses MongoDB
  */
 export async function getCategoryBySlug(slug) {
   if (!slug) return null;
-  const data = await fetchWithFallback(`/categories/${slug}`);
-  if (data && !data.error && data.slug) {
-    return data;
+  try {
+    const dbCat = await getDBCategoryBySlug(slug);
+    if (dbCat) return dbCat;
+  } catch (err) {
+    console.warn("[Data Access] MongoDB category read failed for slug:", slug, err.name);
   }
-  // If single endpoint 404s, search from all categories
-  const allCategories = await getAllCategories();
-  return allCategories.find((c) => c.slug === slug || c.id === slug) || null;
+
+  const external = await fetchFromExternalApi(`/categories/${slug}`);
+  if (external && !external.error && external.slug) return external;
+
+  const all = await getAllCategories();
+  return all.find((c) => c.slug === slug || c.id === slug) || null;
 }
 
 /**
- * Fetch all products
+ * Fetch all products — Uses MongoDB as the primary source of truth
  */
 export async function getAllProducts() {
-  const data = await fetchWithFallback("/products");
-  return Array.isArray(data) ? data : [];
+  try {
+    const dbProducts = await getDBProducts();
+    if (Array.isArray(dbProducts) && dbProducts.length > 0) {
+      return dbProducts;
+    }
+  } catch (err) {
+    console.warn("[Data Access] MongoDB products read failed, using external fallback:", err.name);
+  }
+
+  const external = await fetchFromExternalApi("/products");
+  return Array.isArray(external) ? external : [];
 }
 
 /**
- * Fetch products filtered by category slug
+ * Fetch products filtered by category — Uses MongoDB
  */
 export async function getProductsByCategory(categorySlug) {
   if (!categorySlug) return [];
-  const data = await fetchWithFallback(`/products?category=${categorySlug}`);
-  if (Array.isArray(data) && data.length > 0) {
-    return data;
+  try {
+    const dbProducts = await getDBProductsByCategory(categorySlug);
+    if (Array.isArray(dbProducts) && dbProducts.length > 0) {
+      return dbProducts;
+    }
+  } catch (err) {
+    console.warn("[Data Access] MongoDB category products read failed:", err.name);
   }
-  // Fallback: fetch all and filter in memory
+
+  const external = await fetchFromExternalApi(`/products?category=${categorySlug}`);
+  if (Array.isArray(external) && external.length > 0) return external;
+
   const all = await getAllProducts();
   return all.filter((p) => p.category === categorySlug);
 }
 
 /**
- * Fetch a single product by numeric id or slug
+ * Fetch single product by id or slug — Uses MongoDB
  */
 export async function getProductByIdOrSlug(idOrSlug) {
   if (!idOrSlug) return null;
-
-  // If it's a numeric id, try direct endpoint first
-  const isNumeric = /^\d+$/.test(String(idOrSlug));
-  if (isNumeric) {
-    const direct = await fetchWithFallback(`/products/${idOrSlug}`);
-    if (direct && !direct.error && direct.id) {
-      return direct;
-    }
+  try {
+    const dbProduct = await getDBProductByIdOrSlug(idOrSlug);
+    if (dbProduct) return dbProduct;
+  } catch (err) {
+    console.warn("[Data Access] MongoDB product read failed for id/slug:", idOrSlug, err.name);
   }
 
-  // Otherwise, match against all products by slug or id
-  const all = await getAllProducts();
-  const found = all.find(
-    (p) => String(p.id) === String(idOrSlug) || p.slug === String(idOrSlug)
-  );
+  const isNumeric = /^\d+$/.test(String(idOrSlug));
+  if (isNumeric) {
+    const direct = await fetchFromExternalApi(`/products/${idOrSlug}`);
+    if (direct && !direct.error && direct.id) return direct;
+  }
 
-  return found || null;
+  const all = await getAllProducts();
+  return (
+    all.find(
+      (p) => String(p.id) === String(idOrSlug) || p.slug === String(idOrSlug)
+    ) || null
+  );
 }

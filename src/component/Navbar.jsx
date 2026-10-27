@@ -49,7 +49,9 @@ export default function Navbar() {
       </div>
 
       {/* Row 2: Category Nav Links */}
-      <NavLinks />
+      <Suspense fallback={<div className="h-14 border-b border-gray-200 bg-white" />}>
+        <NavLinks />
+      </Suspense>
 
       {/* Row 3: Live Price Ticker Marquee */}
       <Suspense fallback={<div className="h-9 border-b border-emerald-100 bg-emerald-50/70" />}>

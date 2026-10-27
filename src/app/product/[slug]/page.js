@@ -1,9 +1,12 @@
 import { auth } from "@/lib/auth";
 import { getProductByIdOrSlug } from "@/lib/api";
+import { isProductFavorited } from "@/lib/db/favorites";
 import { formatChange, formatPrice, formatUnit, toBengaliNumber } from "@/lib/utils";
+import FavoriteButton from "@/component/FavoriteButton";
 import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
 export async function generateMetadata({ params }) {
   const { slug } = await params;
@@ -19,24 +22,22 @@ export async function generateMetadata({ params }) {
   };
 }
 
-export default async function ProductDetailPage({ params }) {
-  const { slug } = await params;
-
+async function ProductDetailContent({ slug }) {
   // 1. Server-side Authentication Protection
   const headerList = await headers();
   let session = null;
   try {
     session = await auth.api.getSession({ headers: headerList });
   } catch (err) {
-    console.error("Auth session check error on product page:", err);
+    console.error("Auth session check error on product page:", err.name);
   }
 
-  if (!session) {
+  if (!session?.user) {
     const returnUrl = encodeURIComponent(`/product/${slug}`);
     redirect(`/signin?callbackUrl=${returnUrl}&message=unauthorized`);
   }
 
-  // 2. Fetch Product Data
+  // 2. Fetch Product Data (MongoDB primary source of truth)
   const product = await getProductByIdOrSlug(slug);
 
   if (!product) {
@@ -63,6 +64,14 @@ export default async function ProductDetailPage({ params }) {
         </div>
       </div>
     );
+  }
+
+  // 3. Check User's Favorite Status from MongoDB
+  let isFav = false;
+  try {
+    isFav = await isProductFavorited(session.user.id, product.id);
+  } catch (err) {
+    console.warn("Could not check favorite status:", err.name);
   }
 
   // Calculate Price Statistics
@@ -122,9 +131,13 @@ export default async function ProductDetailPage({ params }) {
                 </span>
               </div>
 
-              <h1 className="mt-2 text-2xl font-black text-gray-900 sm:text-4xl">
-                {product.nameBn}
-              </h1>
+              <div className="mt-2 flex flex-wrap items-center gap-3">
+                <h1 className="text-2xl font-black text-gray-900 sm:text-4xl">
+                  {product.nameBn}
+                </h1>
+                {/* User-specific Persistent Favorite Button */}
+                <FavoriteButton product={product} initialFavorited={isFav} />
+              </div>
 
               <p className="mt-1 text-sm text-gray-500 sm:text-base">
                 একক: <span className="font-semibold text-gray-800">{formattedUnit}</span> • আজকের বাজার দর বিশ্লেষণ
@@ -303,5 +316,29 @@ export default async function ProductDetailPage({ params }) {
         )}
       </div>
     </div>
+  );
+}
+
+function ProductDetailSkeleton() {
+  return (
+    <div className="mx-auto max-w-7xl px-4 py-10 sm:px-6 lg:px-8 space-y-6">
+      <div className="h-4 w-48 animate-pulse rounded bg-gray-200"></div>
+      <div className="h-44 animate-pulse rounded-3xl bg-gray-100"></div>
+      <div className="grid grid-cols-1 gap-6 sm:grid-cols-3">
+        <div className="h-32 animate-pulse rounded-2xl bg-gray-100"></div>
+        <div className="h-32 animate-pulse rounded-2xl bg-gray-100"></div>
+        <div className="h-32 animate-pulse rounded-2xl bg-gray-100"></div>
+      </div>
+    </div>
+  );
+}
+
+export default async function ProductDetailPage({ params }) {
+  const { slug } = await params;
+
+  return (
+    <Suspense fallback={<ProductDetailSkeleton />}>
+      <ProductDetailContent slug={slug} />
+    </Suspense>
   );
 }

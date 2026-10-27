@@ -1,44 +1,44 @@
-"use client";
-
-import { useSession, signOut } from "@/lib/auth-client";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
+import { auth } from "@/lib/auth";
+import { getUserFavorites } from "@/lib/db/favorites";
+import { formatPrice, formatUnit } from "@/lib/utils";
+import SignOutButton from "@/component/SignOutButton";
+import { headers } from "next/headers";
 import Image from "next/image";
-import toast from "react-hot-toast";
+import Link from "next/link";
+import { redirect } from "next/navigation";
+import { Suspense } from "react";
 
-export default function ProfilePage() {
-  const router = useRouter();
-  const { data: session, isPending } = useSession();
+export const metadata = {
+  title: "প্রোফাইল | বাজার দর",
+  description: "আপনার বাজার দর প্রোফাইল এবং পছন্দের সংরক্ষিত পণ্যসমূহ",
+};
 
-  if (isPending) {
-    return (
-      <div className="flex min-h-[450px] items-center justify-center">
-        <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent"></div>
-      </div>
-    );
+async function ProfileContent() {
+  const headerList = await headers();
+  let session = null;
+  try {
+    session = await auth.api.getSession({ headers: headerList });
+  } catch (err) {
+    console.error("[Profile Server] Session check error:", err.name);
   }
 
   if (!session?.user) {
-    router.replace("/signin?callbackUrl=/profile&message=unauthorized");
-    return null;
+    redirect("/signin?callbackUrl=/profile&message=unauthorized");
   }
 
   const user = session.user;
   const initial = user.name ? user.name.trim().charAt(0).toUpperCase() : "👤";
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-      toast.success("সফলভাবে সাইন আউট হয়েছে");
-      router.push("/");
-      router.refresh();
-    } catch {
-      toast.error("সাইন আউট ব্যর্থ হয়েছে");
-    }
-  };
+  // Fetch user-specific persistent data (saved favorites) from MongoDB
+  let favorites = [];
+  try {
+    favorites = await getUserFavorites(user.id);
+  } catch (err) {
+    console.warn("[Profile Server] Could not fetch user favorites:", err.name);
+  }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-12 sm:px-6 lg:px-8">
+    <div className="mx-auto max-w-4xl px-4 py-12 sm:px-6 lg:px-8">
       {/* Profile Card */}
       <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm">
         {/* Cover strip */}
@@ -86,31 +86,68 @@ export default function ProfilePage() {
           <div className="mt-8 grid grid-cols-1 gap-4 border-t border-gray-100 pt-6 sm:grid-cols-2">
             <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
               <span className="text-xs font-medium text-gray-500">নাম</span>
-              <p className="mt-1 font-bold text-gray-900">
-                {user.name || "—"}
-              </p>
+              <p className="mt-1 font-bold text-gray-900">{user.name || "—"}</p>
             </div>
 
             <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
               <span className="text-xs font-medium text-gray-500">ইমেইল</span>
-              <p className="mt-1 font-bold text-gray-900 truncate">
-                {user.email || "—"}
-              </p>
+              <p className="mt-1 truncate font-bold text-gray-900">{user.email || "—"}</p>
             </div>
 
             <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
               <span className="text-xs font-medium text-gray-500">অ্যাকাউন্ট স্ট্যাটাস</span>
-              <p className="mt-1 font-bold text-emerald-700">
-                সক্রিয় (Active)
-              </p>
+              <p className="mt-1 font-bold text-emerald-700">সক্রিয় (Active)</p>
             </div>
 
             <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4">
               <span className="text-xs font-medium text-gray-500">ইউজার আইডি</span>
-              <p className="mt-1 font-mono text-xs text-gray-700 truncate">
-                {user.id || "—"}
-              </p>
+              <p className="mt-1 truncate font-mono text-xs text-gray-700">{user.id || "—"}</p>
             </div>
+          </div>
+
+          {/* User-Specific Persistent Data: Bookmarked / Favorite Products */}
+          <div className="mt-10 border-t border-gray-100 pt-6">
+            <div className="mb-4 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">❤️</span>
+                <h2 className="text-lg font-bold text-gray-900">
+                  আপনার পছন্দের সংরক্ষিত পণ্যসমূহ
+                </h2>
+              </div>
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
+                মোট {favorites.length} টি
+              </span>
+            </div>
+
+            {favorites.length > 0 ? (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
+                {favorites.map((fav) => (
+                  <Link
+                    key={fav.productId}
+                    href={`/product/${fav.productSlug || fav.productId}`}
+                    className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-gray-50/50 p-3.5 transition hover:border-emerald-300 hover:bg-emerald-50/30"
+                  >
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white text-xl shadow-xs">
+                      {fav.image || fav.categoryIcon || "🛒"}
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-gray-900">
+                        {fav.productNameBn}
+                      </p>
+                      <p className="text-xs text-emerald-700 font-semibold">
+                        {formatPrice(fav.todayPrice)} / {formatUnit(fav.unit).replace("প্রতি ", "")}
+                      </p>
+                    </div>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50/50 p-6 text-center">
+                <p className="text-xs text-gray-500 sm:text-sm">
+                  আপনি এখনো কোনো পণ্য পছন্দের তালিকায় সংরক্ষণ করেননি। যেকোনো পণ্যের বিস্তারিত পাতায় গিয়ে সংরক্ষণ করতে পারেন।
+                </p>
+              </div>
+            )}
           </div>
 
           {/* Action Row */}
@@ -122,15 +159,25 @@ export default function ProfilePage() {
               ← হোম পেজে ফিরে যান
             </Link>
 
-            <button
-              onClick={handleSignOut}
-              className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2 text-xs font-bold text-rose-700 transition hover:bg-rose-100 sm:text-sm"
-            >
-              সাইন আউট
-            </button>
+            {/* Client Component for Interactive Sign Out */}
+            <SignOutButton />
           </div>
         </div>
       </div>
     </div>
+  );
+}
+
+export default function ProfilePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-[450px] items-center justify-center">
+          <div className="h-10 w-10 animate-spin rounded-full border-4 border-emerald-600 border-t-transparent"></div>
+        </div>
+      }
+    >
+      <ProfileContent />
+    </Suspense>
   );
 }
