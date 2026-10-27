@@ -1,7 +1,7 @@
 import { MongoClient } from "mongodb";
 
 const uri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/bazardor";
-const dbName = process.env.MONGODB_DB_NAME || "bazardor";
+const dbName = process.env.MONGODB_DB_NAME;
 
 const options = {
   maxPoolSize: 10,
@@ -37,7 +37,7 @@ export async function getMongoClient() {
  */
 export async function getDatabase(customDbName) {
   const connectedClient = await getMongoClient();
-  return connectedClient.db(customDbName || dbName);
+  return customDbName ? connectedClient.db(customDbName) : connectedClient.db();
 }
 
 /**

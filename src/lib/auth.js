@@ -3,7 +3,7 @@ import { mongodbAdapter } from "@better-auth/mongo-adapter";
 import { MongoClient } from "mongodb";
 
 const uri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/bazardor";
-const dbName = process.env.MONGODB_DB_NAME || "bazardor";
+const dbName = process.env.MONGODB_DB_NAME;
 
 // Singleton client to avoid connection leaks across Next.js HMR reloads
 const client =
@@ -18,7 +18,7 @@ if (process.env.NODE_ENV === "development") {
   global._authMongoClient = client;
 }
 
-const db = client.db(dbName);
+const db = client.db();
 
 const socialProviders = {};
 

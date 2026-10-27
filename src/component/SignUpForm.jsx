@@ -45,9 +45,16 @@ export default function SignUpForm() {
       });
 
       if (res?.error) {
-        const errText =
-          res.error.message ||
-          "রেজিস্ট্রেশন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।";
+        let errText = res.error.message || "রেজিস্ট্রেশন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।";
+        if (
+          res.error.message?.toLowerCase().includes("already exists") ||
+          res.error.status === 400 ||
+          res.error.status === 422 ||
+          res.error.message?.toLowerCase().includes("duplicate")
+        ) {
+          errText =
+            "এই ইমেইল দিয়ে ইতিমধ্যে একটি অ্যাকাউন্ট তৈরি করা আছে। অনুগ্রহ করে সাইন ইন করুন।";
+        }
         setErrorMessage(errText);
         toast.error(errText);
         setLoading(false);
@@ -70,12 +77,15 @@ export default function SignUpForm() {
 
   const handleSocialLogin = async (provider) => {
     try {
-      await signIn.social({
+      const res = await signIn.social({
         provider,
         callbackURL: callbackUrl,
       });
+      if (res?.error) {
+        toast.error("সোশ্যাল লগইন এখনও সক্রিয় নয়। অনুগ্রহ করে ইমেইল ও পাসওয়ার্ড ব্যবহার করুন।");
+      }
     } catch {
-      toast.error(`${provider} দিয়ে সাইন ইন করতে সমস্যা হয়েছে`);
+      toast.error("সোশ্যাল লগইন এখনও সক্রিয় নয়। অনুগ্রহ করে ইমেইল ও পাসওয়ার্ড ব্যবহার করুন।");
     }
   };
 

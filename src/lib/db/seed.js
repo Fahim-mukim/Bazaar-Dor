@@ -27,7 +27,7 @@ async function fetchFromApi(endpoint) {
 
 export async function seedDatabase() {
   const uri = process.env.MONGODB_URI;
-  const dbName = process.env.MONGODB_DB_NAME || "bazardor";
+  const dbName = process.env.MONGODB_DB_NAME;
 
   if (!uri) {
     console.error("[Seed] Error: MONGODB_URI environment variable is not set.");
@@ -39,8 +39,8 @@ export async function seedDatabase() {
 
   try {
     await client.connect();
-    const db = client.db(dbName);
-    console.log("[Seed] Connected successfully. Setting up collections and indexes...");
+    const db = client.db();
+    console.log(`[Seed] Connected successfully to database '${db.databaseName}'. Setting up collections and indexes...`);
 
     // 1. Ensure indexes
     const categoriesCol = db.collection("categories");

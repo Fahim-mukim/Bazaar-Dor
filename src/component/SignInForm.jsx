@@ -68,12 +68,15 @@ export default function SignInForm() {
 
   const handleSocialLogin = async (provider) => {
     try {
-      await signIn.social({
+      const res = await signIn.social({
         provider,
         callbackURL: callbackUrl,
       });
+      if (res?.error) {
+        toast.error("সোশ্যাল লগইন এখনও সক্রিয় নয়। অনুগ্রহ করে ইমেইল ও পাসওয়ার্ড ব্যবহার করুন।");
+      }
     } catch {
-      toast.error(`${provider} দিয়ে সাইন ইন করতে সমস্যা হয়েছে`);
+      toast.error("সোশ্যাল লগইন এখনও সক্রিয় নয়। অনুগ্রহ করে ইমেইল ও পাসওয়ার্ড ব্যবহার করুন।");
     }
   };
 
