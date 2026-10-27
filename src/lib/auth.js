@@ -5,13 +5,19 @@ import { MongoClient } from "mongodb";
 const uri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/bazardor";
 const dbName = process.env.MONGODB_DB_NAME || "bazardor";
 
+if (uri.includes("<db_password>") || uri.includes("<password>")) {
+  console.error(
+    "⚠️ [Better Auth MongoDB Alert]: MONGODB_URI contains '<db_password>'. User signup/signin requires replacing '<db_password>' with the actual MongoDB Atlas password in .env."
+  );
+}
+
 // Singleton client to avoid connection leaks across Next.js HMR reloads
 const client =
   global._authMongoClient ||
   new MongoClient(uri, {
     maxPoolSize: 10,
     minPoolSize: 1,
-    serverSelectionTimeoutMS: 7000,
+    serverSelectionTimeoutMS: 6000,
   });
 
 if (process.env.NODE_ENV === "development") {

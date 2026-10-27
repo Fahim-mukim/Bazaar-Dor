@@ -3,42 +3,39 @@ import { MongoClient } from "mongodb";
 const uri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/bazardor";
 const dbName = process.env.MONGODB_DB_NAME || "bazardor";
 
+// Check if placeholder was accidentally left in the URI
+if (uri.includes("<db_password>") || uri.includes("<password>")) {
+  console.error(
+    "⚠️ [MongoDB Configuration Alert]: Your MONGODB_URI in .env still contains '<db_password>'. Please replace '<db_password>' with your actual MongoDB Database User password!"
+  );
+}
+
 const options = {
   maxPoolSize: 10,
   minPoolSize: 1,
-  serverSelectionTimeoutMS: 7000,
-  connectTimeoutMS: 10000,
+  serverSelectionTimeoutMS: 6000,
+  connectTimeoutMS: 8000,
 };
 
 let client;
 let clientPromise;
 
-if (process.env.NODE_ENV === "development") {
-  // In development mode, use a global variable so the MongoClient is not
-  // repeatedly instantiated across HMR (hot module replacement).
-  if (!global._mongoClientPromise) {
-    client = new MongoClient(uri, options);
-    global._mongoClientPromise = client.connect().catch((err) => {
-      // Clean error logging without exposing credentials
-      console.error(
-        "[MongoDB] Connection initialization error:",
-        err.name,
-        err.code || ""
-      );
-      throw err;
-    });
-  }
-  clientPromise = global._mongoClientPromise;
-} else {
-  // In production mode, it's best to not use a global variable.
-  client = new MongoClient(uri, options);
-  clientPromise = client.connect();
-}
-
 /**
- * Returns the connected MongoClient instance
+ * Returns the connected MongoClient instance with lazy initialization
  */
 export async function getMongoClient() {
+  if (process.env.NODE_ENV === "development") {
+    if (!global._mongoClientPromise) {
+      client = new MongoClient(uri, options);
+      global._mongoClientPromise = client.connect();
+    }
+    return await global._mongoClientPromise;
+  }
+
+  if (!clientPromise) {
+    client = new MongoClient(uri, options);
+    clientPromise = client.connect();
+  }
   return await clientPromise;
 }
 
@@ -54,6 +51,15 @@ export async function getDatabase(customDbName) {
  * Safe connection tester that verifies connectivity without leaking credentials
  */
 export async function testMongoConnection() {
+  if (uri.includes("<db_password>") || uri.includes("<password>")) {
+    return {
+      ok: false,
+      errorName: "ConfigurationError",
+      message:
+        "MONGODB_URI still contains '<db_password>'. Please replace it with your real MongoDB Atlas user password in .env.",
+    };
+  }
+
   try {
     const db = await getDatabase();
     await db.command({ ping: 1 });
@@ -68,4 +74,4 @@ export async function testMongoConnection() {
   }
 }
 
-export default clientPromise;
+export default getMongoClient;

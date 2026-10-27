@@ -6,7 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { signUp, signIn } from "@/lib/auth-client";
 import toast from "react-hot-toast";
 
-export default function SignUpForm() {
+export default function SignUpForm({ isDbConfigured = true }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const callbackUrl = searchParams.get("callbackUrl") || "/";
@@ -20,6 +20,14 @@ export default function SignUpForm() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setErrorMessage("");
+
+    if (!isDbConfigured) {
+      const dbAlert =
+        "ডাটাবেজ পাসওয়ার্ড কনফিগার করা নেই। আপনার .env ফাইলে MONGODB_URI-তে <db_password>-এর স্থলে আসল MongoDB Atlas পাসওয়ার্ড বসিয়ে সেভ করুন।";
+      setErrorMessage(dbAlert);
+      toast.error(dbAlert);
+      return;
+    }
 
     if (!name || !email || !password) {
       const msg = "সকল প্রয়োজনীয় তথ্য পূরণ করুন";
@@ -44,18 +52,28 @@ export default function SignUpForm() {
         password,
       });
 
-      if (res.error) {
-        const errText = res.error.message || "রেজিস্ট্রেশন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।";
+      if (res?.error) {
+        let errText =
+          res.error.message ||
+          res.error.statusText ||
+          "রেজিস্ট্রেশন ব্যর্থ হয়েছে। আবার চেষ্টা করুন।";
+        if (res.error.status === 500) {
+          errText =
+            "ডাটাবেজ সংযোগে সমস্যা হচ্ছে। আপনার .env ফাইলে MONGODB_URI-তে <db_password>-এর স্থলে প্রকৃত পাসওয়ার্ড দেওয়া হয়েছে কি না নিশ্চিত করুন।";
+        }
         setErrorMessage(errText);
         toast.error(errText);
         setLoading(false);
         return;
       }
 
-      toast.success("অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে! অনুগ্রহ করে সাইন ইন করুন।");
-      router.push(`/signin${callbackUrl !== "/" ? `?callbackUrl=${encodeURIComponent(callbackUrl)}` : ""}`);
+      toast.success("অ্যাকাউন্ট সফলভাবে তৈরি হয়েছে! স্বাগতম।");
+      router.push(callbackUrl);
+      router.refresh();
     } catch (err) {
-      const errText = err.message || "রেজিস্ট্রেশন প্রক্রিয়ায় সমস্যা দেখা দিয়েছে";
+      const errText =
+        err?.message ||
+        "রেজিস্ট্রেশন প্রক্রিয়ায় সমস্যা দেখা দিয়েছে। অনুগ্রহ করে ডাটাবেজ পাসওয়ার্ড চেক করুন।";
       setErrorMessage(errText);
       toast.error(errText);
     } finally {
@@ -88,8 +106,22 @@ export default function SignUpForm() {
         </p>
       </div>
 
+      {!isDbConfigured && (
+        <div className="mt-5 rounded-2xl border border-amber-300 bg-amber-50 p-4 text-xs text-amber-950 shadow-xs">
+          <div className="flex items-start gap-2.5">
+            <span className="text-xl">⚠️</span>
+            <div className="space-y-1">
+              <p className="font-bold text-amber-900">ডাটাবেজ পাসওয়ার্ড কনফিগারেশন প্রয়োজন</p>
+              <p className="leading-relaxed text-amber-800">
+                আপনার <code className="rounded bg-amber-100 px-1 py-0.5 font-mono text-[11px]">.env</code> ফাইলের <code className="rounded bg-amber-100 px-1 py-0.5 font-mono text-[11px]">MONGODB_URI</code>-তে এখনও <code className="rounded bg-amber-200 px-1 py-0.5 font-mono font-bold text-amber-950">&lt;db_password&gt;</code> প্লেসহোল্ডার রয়েছে। MongoDB Atlas ব্যবহারকারীর আসল পাসওয়ার্ডটি সেখানে বসিয়ে ফাইলটি সেভ করুন।
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       {errorMessage && (
-        <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-center text-xs font-medium text-rose-700">
+        <div className="mt-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-center text-xs font-semibold leading-relaxed text-rose-700">
           {errorMessage}
         </div>
       )}
