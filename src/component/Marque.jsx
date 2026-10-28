@@ -1,10 +1,9 @@
 import { getAllProducts } from "@/lib/api";
 import { formatChange, formatPrice, formatUnit } from "@/lib/utils";
 import Link from "next/link";
-import { connection } from "next/server";
 
 export default async function Marque() {
-  await connection();
+
   let products = [];
   try {
     products = await getAllProducts();
@@ -16,8 +15,9 @@ export default async function Marque() {
     return null;
   }
 
-  // Duplicate items for seamless continuous looping in CSS marquee
-  const tickerItems = [...products, ...products];
+// Show up to 12 products and duplicate them for seamless looping
+const tickerProducts = products.slice(0, 12);
+const tickerItems = [...tickerProducts, ...tickerProducts];
 
   return (
     <div

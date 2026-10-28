@@ -49,7 +49,8 @@ export default function Hero() {
                   alt="বাজার দর হিরো ব্যানার"
                   width={600}
                   height={450}
-                  priority
+                  preload
+                  sizes="(max-width: 639px) 90vw, (max-width: 1023px) 512px, 40vw"
                   className="h-auto w-full rounded-2xl object-cover"
                 />
               </div>

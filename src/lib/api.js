@@ -1,9 +1,5 @@
-/**
- * BazarDor Data Access Layer
- * Primary Source of Truth: MongoDB (Persistent Application Database)
- * Fallback: Programming Hero API (Used for initial import and disaster recovery)
- */
 
+import { cacheLife } from "next/cache";
 import { getDBProducts, getDBProductsByCategory, getDBProductByIdOrSlug } from "@/lib/db/products";
 import { getDBCategories, getDBCategoryBySlug } from "@/lib/db/categories";
 
@@ -32,6 +28,8 @@ async function fetchFromExternalApi(endpoint) {
  * Fetch all categories — Uses MongoDB as the primary source of truth
  */
 export async function getAllCategories() {
+  "use cache";
+  cacheLife("minutes");
   try {
     const dbCats = await getDBCategories();
     if (Array.isArray(dbCats) && dbCats.length > 0) {
@@ -49,6 +47,8 @@ export async function getAllCategories() {
  * Fetch single category by slug — Uses MongoDB
  */
 export async function getCategoryBySlug(slug) {
+  "use cache";
+  cacheLife("minutes");
   if (!slug) return null;
   try {
     const dbCat = await getDBCategoryBySlug(slug);
@@ -68,6 +68,8 @@ export async function getCategoryBySlug(slug) {
  * Fetch all products — Uses MongoDB as the primary source of truth
  */
 export async function getAllProducts() {
+  "use cache";
+  cacheLife("minutes");
   try {
     const dbProducts = await getDBProducts();
     if (Array.isArray(dbProducts) && dbProducts.length > 0) {
@@ -85,6 +87,8 @@ export async function getAllProducts() {
  * Fetch products filtered by category — Uses MongoDB
  */
 export async function getProductsByCategory(categorySlug) {
+  "use cache";
+  cacheLife("minutes");
   if (!categorySlug) return [];
   try {
     const dbProducts = await getDBProductsByCategory(categorySlug);
@@ -106,6 +110,8 @@ export async function getProductsByCategory(categorySlug) {
  * Fetch single product by id or slug — Uses MongoDB
  */
 export async function getProductByIdOrSlug(idOrSlug) {
+  "use cache";
+  cacheLife("minutes");
   if (!idOrSlug) return null;
   try {
     const dbProduct = await getDBProductByIdOrSlug(idOrSlug);

@@ -23,7 +23,6 @@ export default function Navbar() {
                 width={40}
                 height={40}
                 className="h-8 w-8 object-contain sm:h-10 sm:w-10"
-                priority
               />
             </div>
 
