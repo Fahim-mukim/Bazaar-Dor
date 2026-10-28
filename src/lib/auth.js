@@ -1,39 +1,13 @@
 import { betterAuth } from "better-auth";
 import { mongodbAdapter } from "@better-auth/mongo-adapter";
-import { MongoClient } from "mongodb";
+import { client, db } from "@/lib/mongodb";
 
-const uri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017/bazardor";
-const dbName = process.env.MONGODB_DB_NAME;
+const secret = process.env.BETTER_AUTH_SECRET;
 
-// Singleton client to avoid connection leaks across Next.js HMR reloads
-const client =
-  global._authMongoClient ||
-  new MongoClient(uri, {
-    maxPoolSize: 10,
-    minPoolSize: 1,
-    serverSelectionTimeoutMS: 6000,
-  });
-
-if (process.env.NODE_ENV === "development") {
-  global._authMongoClient = client;
-}
-
-const db = client.db();
-
-const socialProviders = {};
-
-if (process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET) {
-  socialProviders.google = {
-    clientId: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  };
-}
-
-if (process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET) {
-  socialProviders.github = {
-    clientId: process.env.GITHUB_CLIENT_ID,
-    clientSecret: process.env.GITHUB_CLIENT_SECRET,
-  };
+if (!secret || secret.length < 32) {
+  throw new Error(
+    "BETTER_AUTH_SECRET must be configured with a strong secret of at least 32 characters."
+  );
 }
 
 const appUrl =
@@ -41,33 +15,59 @@ const appUrl =
   process.env.NEXT_PUBLIC_APP_URL ||
   "http://localhost:3000";
 
+const trustedOrigins = [
+  ...new Set(
+    [
+      appUrl,
+      process.env.NEXT_PUBLIC_APP_URL,
+    ].filter(Boolean)
+  ),
+];
+
+const socialProviders = {};
+
+if (
+  process.env.GOOGLE_CLIENT_ID &&
+  process.env.GOOGLE_CLIENT_SECRET
+) {
+  socialProviders.google = {
+    clientId: process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  };
+}
+
+if (
+  process.env.GITHUB_CLIENT_ID &&
+  process.env.GITHUB_CLIENT_SECRET
+) {
+  socialProviders.github = {
+    clientId: process.env.GITHUB_CLIENT_ID,
+    clientSecret: process.env.GITHUB_CLIENT_SECRET,
+  };
+}
+
 export const auth = betterAuth({
-  database: mongodbAdapter(db),
+  appName: "BazarDor",
+
   baseURL: appUrl,
-  trustedOrigins: [
-    appUrl,
-    "http://localhost:3000",
-    "http://localhost:3001",
-    "http://localhost:3002",
-    "http://localhost:3003",
-    "http://127.0.0.1:3000",
-    "http://127.0.0.1:3001",
-    "http://127.0.0.1:3002",
-    "http://127.0.0.1:3003",
-    "http://localhost:*",
-    "http://127.0.0.1:*",
-    "http://192.168.*:*",
-    process.env.BETTER_AUTH_URL,
-    process.env.NEXT_PUBLIC_APP_URL,
-  ].filter(Boolean),
-  secret:
-    process.env.BETTER_AUTH_SECRET ||
-    "bazardor-production-secret-key-at-least-32-chars-long",
+  secret,
+  trustedOrigins,
+
+  // Use the same MongoClient and explicitly selected database
+  // as the rest of the application.
+  database: mongodbAdapter(db, {
+    client,
+  }),
+
   emailAndPassword: {
     enabled: true,
     autoSignIn: true,
+    minPasswordLength: 8,
+    maxPasswordLength: 128,
   },
+
   socialProviders,
+
   user: {
     changeEmail: {
       enabled: false,
@@ -75,4 +75,5 @@ export const auth = betterAuth({
   },
 });
 
-export { db, client };
+// Keep existing imports from this module working, if any.
+export { client, db };

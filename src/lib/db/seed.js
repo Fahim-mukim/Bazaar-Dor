@@ -1,28 +1,64 @@
 import nextEnv from "@next/env";
-const { loadEnvConfig } = nextEnv;
 import { MongoClient } from "mongodb";
 
+const { loadEnvConfig } = nextEnv;
+
+// Load .env from the project root.
 loadEnvConfig(process.cwd());
 
-const PRIMARY_API = "https://openapi.programming-hero.com/api/bazardor";
-const FALLBACK_API = "https://api.abcz.workers.dev/api/bazardor";
+const PRIMARY_API =
+  "https://openapi.programming-hero.com/api/bazardor";
 
+const FALLBACK_API =
+  "https://api.abcz.workers.dev/api/bazardor";
+
+/**
+ * Fetch an array from the primary API, then try the fallback API.
+ * Never log a URL containing database credentials.
+ */
 async function fetchFromApi(endpoint) {
-  try {
-    const res = await fetch(`${PRIMARY_API}${endpoint}`);
-    if (res.ok) return await res.json();
-  } catch (err) {
-    console.warn(`[Seed] Primary API failed for ${endpoint}, trying fallback...`);
+  const sources = [
+    { name: "Primary API", url: PRIMARY_API },
+    { name: "Fallback API", url: FALLBACK_API },
+  ];
+
+  for (const source of sources) {
+    try {
+      const response = await fetch(`${source.url}${endpoint}`);
+
+      if (!response.ok) {
+        console.warn(
+          `[Seed] ${source.name} returned HTTP ${response.status} for ${endpoint}.`
+        );
+        continue;
+      }
+
+      const payload = await response.json();
+
+      // Support APIs that return either an array directly
+      // or wrap it inside a data property.
+      const data = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.data)
+          ? payload.data
+          : null;
+
+      if (data) {
+        return data;
+      }
+
+      console.warn(
+        `[Seed] ${source.name} returned an unexpected format for ${endpoint}.`
+      );
+    } catch (error) {
+      console.warn(
+        `[Seed] ${source.name} failed for ${endpoint}:`,
+        error.name || "FetchError"
+      );
+    }
   }
 
-  try {
-    const res = await fetch(`${FALLBACK_API}${endpoint}`);
-    if (res.ok) return await res.json();
-  } catch (err) {
-    console.error(`[Seed] Fallback API also failed for ${endpoint}:`, err.message);
-  }
-
-  return [];
+  return null;
 }
 
 export async function seedDatabase() {
@@ -30,46 +66,88 @@ export async function seedDatabase() {
   const dbName = process.env.MONGODB_DB_NAME;
 
   if (!uri) {
-    console.error("[Seed] Error: MONGODB_URI environment variable is not set.");
-    process.exit(1);
+    throw new Error("MONGODB_URI is missing from .env.");
   }
 
-  console.log("[Seed] Connecting to MongoDB database...");
-  const client = new MongoClient(uri, { serverSelectionTimeoutMS: 8000 });
+  if (!dbName) {
+    throw new Error("MONGODB_DB_NAME is missing from .env.");
+  }
+
+  if (
+    /<db_password>|<password>|<username>|YOUR_USERNAME|YOUR_PASSWORD/i.test(
+      uri
+    )
+  ) {
+    throw new Error(
+      "MONGODB_URI contains a placeholder. Configure the actual Atlas credentials."
+    );
+  }
+
+  const client = new MongoClient(uri, {
+    maxPoolSize: 5,
+    serverSelectionTimeoutMS: 8000,
+    connectTimeoutMS: 8000,
+  });
 
   try {
+    console.log("[Seed] Connecting to MongoDB...");
     await client.connect();
-    const db = client.db();
-    console.log(`[Seed] Connected successfully to database '${db.databaseName}'. Setting up collections and indexes...`);
+
+    const db = client.db(dbName);
+    await db.command({ ping: 1 });
+
+    console.log(
+      `[Seed] Connected successfully to database "${db.databaseName}".`
+    );
 
     // 1. Ensure indexes
     const categoriesCol = db.collection("categories");
-    await categoriesCol.createIndex({ slug: 1 }, { unique: true });
+    await categoriesCol.createIndex(
+      { slug: 1 },
+      { unique: true }
+    );
 
     const productsCol = db.collection("products");
-    await productsCol.createIndex({ id: 1 }, { unique: true });
-    await productsCol.createIndex({ slug: 1 }, { unique: true });
+    await productsCol.createIndex(
+      { id: 1 },
+      { unique: true }
+    );
+    await productsCol.createIndex(
+      { slug: 1 },
+      { unique: true }
+    );
     await productsCol.createIndex({ category: 1 });
 
     const favoritesCol = db.collection("user_favorites");
-    await favoritesCol.createIndex({ userId: 1, productId: 1 }, { unique: true });
+    await favoritesCol.createIndex(
+      { userId: 1, productId: 1 },
+      { unique: true }
+    );
     await favoritesCol.createIndex({ userId: 1 });
 
-    // 2. Fetch & Upsert Categories
-    console.log("[Seed] Fetching categories from API...");
+    // 2. Fetch and upsert categories
+    console.log("[Seed] Fetching categories...");
     const rawCategories = await fetchFromApi("/categories");
-    let catCount = 0;
 
-    for (const cat of rawCategories) {
-      if (!cat.slug) continue;
+    if (!Array.isArray(rawCategories)) {
+      throw new Error(
+        "Could not fetch categories from either configured API."
+      );
+    }
+
+    let categoryCount = 0;
+
+    for (const category of rawCategories) {
+      if (!category?.slug) continue;
+
       await categoriesCol.updateOne(
-        { slug: cat.slug },
+        { slug: category.slug },
         {
           $set: {
-            id: cat.id || cat.slug,
-            slug: cat.slug,
-            nameBn: cat.nameBn,
-            icon: cat.icon || "🏷️",
+            id: category.id || category.slug,
+            slug: category.slug,
+            nameBn: category.nameBn,
+            icon: category.icon || "🏷️",
             updatedAt: new Date(),
           },
           $setOnInsert: {
@@ -78,35 +156,52 @@ export async function seedDatabase() {
         },
         { upsert: true }
       );
-      catCount++;
-    }
-    console.log(`[Seed] Successfully upserted ${catCount} categories.`);
 
-    // 3. Fetch & Upsert Products
-    console.log("[Seed] Fetching products from API...");
+      categoryCount++;
+    }
+
+    console.log(
+      `[Seed] Upserted ${categoryCount} categories.`
+    );
+
+    // 3. Fetch and upsert products
+    console.log("[Seed] Fetching products...");
     const rawProducts = await fetchFromApi("/products");
-    let prodCount = 0;
 
-    for (const prod of rawProducts) {
-      if (!prod.id) continue;
+    if (!Array.isArray(rawProducts)) {
+      throw new Error(
+        "Could not fetch products from either configured API."
+      );
+    }
+
+    let productCount = 0;
+
+    for (const product of rawProducts) {
+      if (product?.id == null) continue;
+
       await productsCol.updateOne(
-        { id: prod.id },
+        { id: product.id },
         {
           $set: {
-            id: prod.id,
-            slug: prod.slug,
-            nameBn: prod.nameBn,
-            category: prod.category,
-            categoryNameBn: prod.categoryNameBn || "",
-            categoryIcon: prod.categoryIcon || "",
-            unit: prod.unit || "kg",
-            image: prod.image || "🛒",
-            today: prod.today,
-            yesterday: prod.yesterday,
-            lastWeek: prod.lastWeek,
-            lastMonth: prod.lastMonth,
-            change: prod.change || { dir: "flat", pct: 0 },
-            markets: Array.isArray(prod.markets) ? prod.markets : [],
+            id: product.id,
+            slug: product.slug,
+            nameBn: product.nameBn,
+            category: product.category,
+            categoryNameBn: product.categoryNameBn || "",
+            categoryIcon: product.categoryIcon || "",
+            unit: product.unit || "kg",
+            image: product.image || "🛒",
+            today: product.today,
+            yesterday: product.yesterday,
+            lastWeek: product.lastWeek,
+            lastMonth: product.lastMonth,
+            change: product.change || {
+              dir: "flat",
+              pct: 0,
+            },
+            markets: Array.isArray(product.markets)
+              ? product.markets
+              : [],
             updatedAt: new Date(),
           },
           $setOnInsert: {
@@ -115,26 +210,48 @@ export async function seedDatabase() {
         },
         { upsert: true }
       );
-      prodCount++;
+
+      productCount++;
     }
-    console.log(`[Seed] Successfully upserted ${prodCount} products.`);
-    console.log("[Seed] Database migration and seeding completed successfully!");
-  } catch (err) {
-    console.error("[Seed] Migration failed with error:", err.name, err.code || "");
-    if (err.name === "MongoServerSelectionError") {
+
+    console.log(`[Seed] Upserted ${productCount} products.`);
+    console.log("[Seed] Database seeding completed successfully.");
+
+    return {
+      ok: true,
+      databaseName: dbName,
+      categoryCount,
+      productCount,
+    };
+  } catch (error) {
+    console.error(
+      "[Seed] Failed:",
+      error.name || "Error",
+      error.code ?? "N/A"
+    );
+
+    if (
+      error.code === 8000 ||
+      /bad auth|authentication failed/i.test(error.message || "")
+    ) {
       console.error(
-        "[Seed] Notice: MongoDB Atlas rejected the connection (IP not whitelisted). Please ensure your current public IP is added to your MongoDB Atlas Network Access whitelist."
+        "[Seed] Atlas rejected authentication. Check the Database Access username and password."
+      );
+    } else if (error.name === "MongoServerSelectionError") {
+      console.error(
+        "[Seed] Could not select a MongoDB server. Check Atlas Network Access and cluster availability."
       );
     }
-    throw err;
+
+    throw error;
   } finally {
     await client.close();
   }
 }
 
-// Execute directly if run as a script
+// Run only when executed directly as a script.
 if (process.argv[1]?.endsWith("seed.js")) {
-  seedDatabase()
-    .then(() => process.exit(0))
-    .catch(() => process.exit(1));
+  seedDatabase().catch(() => {
+    process.exitCode = 1;
+  });
 }

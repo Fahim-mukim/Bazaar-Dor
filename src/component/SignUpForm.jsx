@@ -28,8 +28,8 @@ export default function SignUpForm() {
       return;
     }
 
-    if (password.length < 6) {
-      const msg = "পাসওয়ার্ড কমপক্ষে ৬ অক্ষরের হতে হবে";
+    if (password.length < 8) {
+      const msg = "পাসওয়ার্ড কমপক্ষে ৮ অক্ষরের হতে হবে";
       setErrorMessage(msg);
       toast.error(msg);
       return;
@@ -145,10 +145,10 @@ export default function SignUpForm() {
           <input
             type="password"
             required
-            minLength={6}
+            minLength={8}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            placeholder="কমপক্ষে ৬ অক্ষরের পাসওয়ার্ড"
+            placeholder="কমপক্ষে ৮ অক্ষরের পাসওয়ার্ড"
             className="mt-1.5 w-full rounded-xl border border-gray-300 px-3.5 py-2.5 text-sm text-gray-900 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-500/20"
           />
         </div>
